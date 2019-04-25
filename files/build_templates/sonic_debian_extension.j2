@@ -135,6 +135,25 @@ sudo dpkg --root=$FILESYSTEM_ROOT -i target/debs/libnss-tacplus_*.deb || \
 sudo LANG=C chroot $FILESYSTEM_ROOT pam-auth-update --remove tacplus
 sudo sed -i -e '/^passwd/s/ tacplus//' $FILESYSTEM_ROOT/etc/nsswitch.conf
 
+# Install collectd
+{% if enable_collectd_service == "y" %}
+    sudo LANG=C DEBIAN_FRONTEND=noninteractive chroot $FILESYSTEM_ROOT apt-get -y install collectd 
+{% endif %}
+
+# squid for gnmi_server
+{% if enable_accton_gnmi_service == "y" %}
+    sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip install protobuf
+    sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip install grpcio
+
+    GNMISVR_PY2_WHEEL_NAME=$(basename {{gnmisvr_py2_wheel_path}})
+    sudo cp {{gnmisvr_py2_wheel_path}} $FILESYSTEM_ROOT/$GNMISVR_PY2_WHEEL_NAME
+    sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip install $GNMISVR_PY2_WHEEL_NAME
+    sudo rm -rf $FILESYSTEM_ROOT/$GNMISVR_PY2_WHEEL_NAME
+
+    sudo cp $IMAGE_CONFIGS/gnmi_svr/gnmi_svr.service $FILESYSTEM_ROOT/etc/systemd/system/
+    sudo LANG=C chroot $FILESYSTEM_ROOT systemctl enable gnmi_svr.service
+{% endif %}
+
 # Copy crontabs
 sudo cp -f $IMAGE_CONFIGS/cron.d/* $FILESYSTEM_ROOT/etc/cron.d/
 

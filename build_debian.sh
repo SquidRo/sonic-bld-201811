@@ -58,15 +58,38 @@ DEFAULT_USERINFO="Default admin user,,,"
 if [[ -d $FILESYSTEM_ROOT ]]; then
     sudo rm -rf $FILESYSTEM_ROOT || die "Failed to clean chroot directory"
 fi
+
+ROOTFS_SHADOW=${FILESYSTEM_ROOT}_no_dimg
+IS_DONE=false
+while [ $IS_DONE == false ];  do
+
+if [[ -d ${ROOTFS_SHADOW} ]]; then #squid
+    ### shadow rootfs exists
+    IS_DONE=true
+
+    sudo cp -ax ${ROOTFS_SHADOW} ${FILESYSTEM_ROOT}
+
+    ## make / as a mountpoint in chroot env, needed by dockerd
+    pushd $FILESYSTEM_ROOT
+    sudo mount --bind . .
+    popd
+
+    ## Note: mounting is necessary to makedev and install linux image
+    echo '[INFO] Mount all'
+    ## Output all the mounted device for troubleshooting
+    mount
+
+    trap_push 'sudo umount $FILESYSTEM_ROOT/proc || true'
+    sudo LANG=C chroot $FILESYSTEM_ROOT mount proc /proc -t proc
+
+else #squid
+    ### create shadow rootfs
+    echo "Create shadow roofs........................."
+
 mkdir -p $FILESYSTEM_ROOT
 mkdir -p $FILESYSTEM_ROOT/$PLATFORM_DIR
 mkdir -p $FILESYSTEM_ROOT/$PLATFORM_DIR/x86_64-grub
 touch $FILESYSTEM_ROOT/$PLATFORM_DIR/firsttime
-
-## make / as a mountpoint in chroot env, needed by dockerd
-pushd $FILESYSTEM_ROOT
-sudo mount --bind . .
-popd
 
 ## Build a basic Debian system by debootstrap
 echo '[INFO] Debootstrap...'
@@ -377,6 +400,8 @@ sudo cp files/dhcp/graphserviceurl $FILESYSTEM_ROOT/etc/dhcp/dhclient-exit-hooks
 sudo cp files/dhcp/snmpcommunity $FILESYSTEM_ROOT/etc/dhcp/dhclient-exit-hooks.d/
 sudo cp files/dhcp/dhclient.conf $FILESYSTEM_ROOT/etc/dhcp/
 
+fi #squid
+
 ## Version file
 sudo mkdir -p $FILESYSTEM_ROOT/etc/sonic
 sudo tee $FILESYSTEM_ROOT/etc/sonic/sonic_version.yml > /dev/null <<EOF
@@ -390,32 +415,38 @@ build_number: ${BUILD_NUMBER:-0}
 built_by: $USER@$BUILD_HOSTNAME
 EOF
 
-if [ -f sonic_debian_extension.sh ]; then
-    ./sonic_debian_extension.sh $FILESYSTEM_ROOT $PLATFORM_DIR
-fi
 
-## Organization specific extensions such as Configuration & Scripts for features like AAA, ZTP...
-if [ "${enable_organization_extensions}" = "y" ]; then
-   if [ -f files/build_templates/organization_extensions.sh ]; then
-      sudo chmod 755 files/build_templates/organization_extensions.sh 
-      ./files/build_templates/organization_extensions.sh -f $FILESYSTEM_ROOT -h $HOSTNAME
-   fi
-fi
+#### don't do this when creating shadow
+if [ $IS_DONE == true ]; then
 
-## Remove gcc and python dev pkgs
-sudo LANG=C DEBIAN_FRONTEND=noninteractive chroot $FILESYSTEM_ROOT apt-get -y remove gcc libpython2.7-dev
+    if [ -f sonic_debian_extension.sh ]; then
+        ./sonic_debian_extension.sh $FILESYSTEM_ROOT $PLATFORM_DIR
+    fi
 
-## Update initramfs
-sudo chroot $FILESYSTEM_ROOT update-initramfs -u
+    ## Organization specific extensions such as Configuration & Scripts for features like AAA, ZTP...
+    if [ "${enable_organization_extensions}" = "y" ]; then
+       if [ -f files/build_templates/organization_extensions.sh ]; then
+          sudo chmod 755 files/build_templates/organization_extensions.sh
+          ./files/build_templates/organization_extensions.sh -f $FILESYSTEM_ROOT -h $HOSTNAME
+       fi
+    fi
 
-## Clean up apt
-sudo LANG=C chroot $FILESYSTEM_ROOT apt-get -y autoremove
-sudo LANG=C chroot $FILESYSTEM_ROOT apt-get autoclean
-sudo LANG=C chroot $FILESYSTEM_ROOT apt-get clean
-sudo LANG=C chroot $FILESYSTEM_ROOT bash -c 'rm -rf /usr/share/doc/* /usr/share/locale/* /var/lib/apt/lists/* /tmp/*'
+    ## Remove gcc and python dev pkgs
+    sudo LANG=C DEBIAN_FRONTEND=noninteractive chroot $FILESYSTEM_ROOT apt-get -y remove gcc libpython2.7-dev
 
-## Clean up proxy
-[ -n "$http_proxy" ] && sudo rm -f $FILESYSTEM_ROOT/etc/apt/apt.conf.d/01proxy
+    ## Update initramfs
+    sudo chroot $FILESYSTEM_ROOT update-initramfs -u
+
+    ## Clean up apt
+    sudo LANG=C chroot $FILESYSTEM_ROOT apt-get -y autoremove
+    sudo LANG=C chroot $FILESYSTEM_ROOT apt-get autoclean
+    sudo LANG=C chroot $FILESYSTEM_ROOT apt-get clean
+    sudo LANG=C chroot $FILESYSTEM_ROOT bash -c 'rm -rf /usr/share/doc/* /usr/share/locale/* /var/lib/apt/lists/* /tmp/*'
+
+    ## Clean up proxy
+    [ -n "$http_proxy" ] && sudo rm -f $FILESYSTEM_ROOT/etc/apt/apt.conf.d/01proxy
+
+fi ### IS_DONE
 
 ## Umount all
 echo '[INFO] Umount all'
@@ -426,6 +457,13 @@ sudo LANG=C chroot $FILESYSTEM_ROOT fuser -km /proc || true
 ## Wait fuser fully kill the processes
 sleep 15
 sudo umount $FILESYSTEM_ROOT/proc || true
+
+    ### shadow complete ??? squid
+    if [ $IS_DONE == false ]; then
+        sudo cp -ax ${FILESYSTEM_ROOT} ${ROOTFS_SHADOW}
+    fi
+
+done ### end of while
 
 ## Prepare empty directory to trigger mount move in initramfs-tools/mount_loop_root, implemented by patching
 sudo mkdir $FILESYSTEM_ROOT/host

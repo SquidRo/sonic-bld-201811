@@ -160,6 +160,8 @@ $(info "SONIC_PROFILING_ON"              : "$(SONIC_PROFILING_ON)")
 $(info "KERNEL_PROCURE_METHOD"           : "$(KERNEL_PROCURE_METHOD)")
 $(info "BUILD_TIMESTAMP"                 : "$(BUILD_TIMESTAMP)")
 $(info "VS_PREPARE_MEM"                  : "$(VS_PREPARE_MEM)")
+$(info "ENABLE_ACCTON_GNMI_SERVICE"      : "$(ENABLE_ACCTON_GNMI_SERVICE)")
+$(info "ENABLE_COLLECTD_SERVICE"         : "$(ENABLE_COLLECTD_SERVICE)")
 $(info )
 
 ###############################################################################
@@ -503,6 +505,11 @@ $(DOCKER_LOAD_TARGETS) : $(TARGET_PATH)/%.gz-load : .platform docker-start $$(TA
 ###############################################################################
 ## Installers
 ###############################################################################
+ACCTON_TARGET_DEPS :=
+
+ifeq ($(ENABLE_ACCTON_GNMI_SERVICE),y)
+	ACCTON_TARGET_DEPS += $(addprefix $(PYTHON_WHEELS_PATH)/,$(GNMISVR_PY2))
+endif
 
 # targets for building installers with base image
 $(addprefix $(TARGET_PATH)/, $(SONIC_INSTALLERS)) : $(TARGET_PATH)/% : \
@@ -526,7 +533,8 @@ $(addprefix $(TARGET_PATH)/, $(SONIC_INSTALLERS)) : $(TARGET_PATH)/% : \
         $$(addprefix $(TARGET_PATH)/,$$($$*_DOCKERS)) \
         $$(addprefix $(PYTHON_WHEELS_PATH)/,$(SONIC_CONFIG_ENGINE)) \
         $$(addprefix $(PYTHON_WHEELS_PATH)/,$(SONIC_PLATFORM_COMMON_PY2)) \
-        $$(addprefix $(PYTHON_WHEELS_PATH)/,$(REDIS_DUMP_LOAD_PY2))
+        $$(addprefix $(PYTHON_WHEELS_PATH)/,$(REDIS_DUMP_LOAD_PY2)) \
+	$(ACCTON_TARGET_DEPS)
 	$(HEADER)
 	# Pass initramfs and linux kernel explicitly. They are used for all platforms
 	export initramfs_tools="$(DEBS_PATH)/$(INITRAMFS_TOOLS)"
@@ -547,6 +555,9 @@ $(addprefix $(TARGET_PATH)/, $(SONIC_INSTALLERS)) : $(TARGET_PATH)/% : \
 	export swsssdk_py2_wheel_path="$(addprefix $(PYTHON_WHEELS_PATH)/,$(SWSSSDK_PY2))"
 	export platform_common_py2_wheel_path="$(addprefix $(PYTHON_WHEELS_PATH)/,$(SONIC_PLATFORM_COMMON_PY2))"
 	export redis_dump_load_py2_wheel_path="$(addprefix $(PYTHON_WHEELS_PATH)/,$(REDIS_DUMP_LOAD_PY2))"
+	export gnmisvr_py2_wheel_path="$(addprefix $(PYTHON_WHEELS_PATH)/,$(GNMISVR_PY2))"
+	export enable_accton_gnmi_service="$(ENABLE_ACCTON_GNMI_SERVICE)"
+	export enable_collectd_service="$(ENABLE_COLLECTD_SERVICE)"
 
 	$(foreach docker, $($*_DOCKERS),\
 		export docker_image="$(docker)"
