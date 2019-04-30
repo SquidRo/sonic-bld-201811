@@ -54,14 +54,14 @@ DEFAULT_USERINFO="Default admin user,,,"
     exit 1
 }
 
+ROOTFS_SHADOW=${FILESYSTEM_ROOT}_no_dimg
+IS_DONE=false
+while [ $IS_DONE == false ];  do
+
 ## Prepare the file system directory
 if [[ -d $FILESYSTEM_ROOT ]]; then
     sudo rm -rf $FILESYSTEM_ROOT || die "Failed to clean chroot directory"
 fi
-
-ROOTFS_SHADOW=${FILESYSTEM_ROOT}_no_dimg
-IS_DONE=false
-while [ $IS_DONE == false ];  do
 
 if [[ -d ${ROOTFS_SHADOW} ]]; then #squid
     ### shadow rootfs exists
