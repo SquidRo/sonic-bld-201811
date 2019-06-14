@@ -1,0 +1,23 @@
+Index: sonic-utilities/scripts/teamshow
+===================================================================
+--- sonic-utilities.orig/scripts/teamshow
++++ sonic-utilities/scripts/teamshow
+@@ -94,7 +94,8 @@ class Teamshow(object):
+                 continue
+             json_info = json.loads(self.teamsraw[team_id])
+             info['protocol'] = json_info['setup']['runner_name'].upper()
+-            info['protocol'] += '(A)' if json_info['runner']['active'] else '(I)'
++            if info['protocol'] == 'LACP':
++                info['protocol'] += '(A)' if json_info['runner']['active'] else '(I)'
+             portchannel_status = self.get_portchannel_status(team)
+             if portchannel_status is None:
+                 info['protocol'] += '(N/A)'
+@@ -111,7 +112,7 @@ class Teamshow(object):
+             else:
+                 for port in json_info['ports']:
+                     info['ports'] += port
+-                    info['ports'] += '(S)' if json_info['ports'][port]['runner']['selected'] else '(D)'
++                    info['ports'] += '(S)' if info['protocol'] != 'LACP' or json_info['ports'][port]['runner']['selected'] else '(D)'
+                     info['ports'] += ' '
+             self.summary[team_id] = info
+ 
